@@ -12,10 +12,6 @@ def get_gaussian_kernel(sigma):
     return np.outer(g, g)
 
 def filter_image(img, kernel, pad_mode="reflect"):
-    """
-    Applies separable convolution using reflection padding.
-    Handles both single-channel (grayscale) and 3-channel (color) images.
-    """
     if img.ndim == 2:
         return conv2d_sep(img, kernel, pad_mode=pad_mode)
     elif img.ndim == 3:
@@ -40,12 +36,9 @@ def make_hybrid(img1, img2, sigma_low, sigma_high):
 
 
 def compute_fft_log_magnitude(img):
-    """Computes the log magnitude of the 2D FFT on a grayscale image, exactly as required."""
-    # Convert to grayscale if the image has 3 channels
     if img.ndim == 3:
         gray_image = 0.2989 * img[:, :, 0] + 0.5870 * img[:, :, 1] + 0.1140 * img[:, :, 2]
     else:
         gray_image = img.copy()
         
-    # Assignment exact formula
     return np.log(np.abs(np.fft.fftshift(np.fft.fft2(gray_image))))
