@@ -18,17 +18,22 @@ def find_seam(energy) -> np.ndarray:
     # back pointer -> the tabulation variable
     backptr = np.zeros((h, w), dtype=int)
 
-    for row in range(1, h):               
-        for col in range(w):        
-            col_left = max(col - 1, 0)      
-            col_right = min(col + 1, w - 1)  
-            col_range = range(col_left, col_right + 1) 
+    for row in range(1, h):
+        prev = seam_energies[row - 1]
+        cols = np.arange(w)
+        col_left = np.maximum(cols - 1, 0)
+        col_right = np.minimum(cols + 1, w - 1)
+        candidates = np.stack((prev[col_left], prev[cols], prev[col_right]), axis=1)
 
-            # minimum cost in the parent column
-            parent_col = min(col_range, key=lambda col_i: seam_energies[row - 1, col_i])   
-            backptr[row, col] = parent_col   
-            # compute accumulative energy current + parent    
-            seam_energies[row, col] += seam_energies[row - 1, parent_col]   
+        # minimum cost in the parent column
+        parent_choice = np.argmin(candidates, axis=1)
+        backptr[row] = np.where(
+            parent_choice == 0,
+            col_left,
+            np.where(parent_choice == 1, cols, col_right),
+        )
+        # compute accumulative energy current + parent
+        seam_energies[row] += np.choose(parent_choice, (candidates[:, 0], candidates[:, 1], candidates[:, 2]))
             
     seam = np.zeros(h, dtype=int)
     # get the lower cost seam
@@ -52,14 +57,17 @@ def highlight_seam(img, seam: np.ndarray, highlight_color:tuple):
     return img
 
     
-def reduce_img_size(img, target_width: int,highlight_color:tuple = None) -> tuple:
+def reduce_img_size(img, target_width_ratio: float,highlight_color:tuple = None) -> tuple:
     h,w = img.shape[:2]
     reduced_img = np.array(img, dtype=np.float64) 
     highlighted_img = np.array(img, dtype=np.float64) 
     iter_num = 0
     
-    if target_width > img.shape[1]:
-        raise ValueError("target_width must not exceed the current width")
+    target_width = np.floor((1- target_width_ratio) * w)
+    if target_width_ratio < 0:
+        raise ValueError("target_width_ratio must be positive")
+    if target_width_ratio > 1:
+        raise ValueError("target_width_ratio must not exceed the current width")
     if highlight_color ==None:
         highlight_color = (255,0,0)
         
