@@ -1,15 +1,35 @@
+from collections.abc import Callable
+
 import numpy as np
-from filters_helpers import gradient_magnitude,to_gray
+from filters_helpers import (
+    dog_diff,
+    dog_filters,
+    finite_diff,
+    gradient_magnitude,
+    to_gray,
+)
 
-def compute_energy_from_gradient(img) -> np.ndarray:
-    img = np.asarray(img, dtype=np.float64)
-    gray = to_gray(img) if img.ndim == 3 else img
 
-    if gray.ndim == 3:                
-        gray = gray.mean(axis=2)
-
+def compute_energy_from_gradient(gray: np.ndarray) -> np.ndarray:
+    gray = np.asarray(to_gray(gray), dtype=np.float64)
     gy, gx = np.gradient(gray)
     return gradient_magnitude(gx, gy)
+
+
+def compute_energy_from_finite_diff(gray: np.ndarray) -> np.ndarray:
+    gray = np.asarray(to_gray(gray), dtype=np.float64)
+    gx, gy = finite_diff(gray)
+    return gradient_magnitude(gx, gy)
+
+
+def compute_energy_from_dog(
+    gray: np.ndarray, size: int = 5, sigma: float = 1.0
+) -> np.ndarray:
+    gray = np.asarray(to_gray(gray), dtype=np.float64)
+    dogx, dogy = dog_filters(size, sigma)
+    gx, gy = dog_diff(gray, dogx, dogy)
+    return gradient_magnitude(gx, gy)
+
 
 def find_seam(energy) -> np.ndarray:
     '''using tabulation bottom-up approach'''
@@ -57,37 +77,55 @@ def highlight_seam(img, seam: np.ndarray, highlight_color:tuple):
     return img
 
     
-def reduce_img_size(img, target_width_ratio: float,highlight_color:tuple = None) -> tuple:
-    h,w = img.shape[:2]
-    reduced_img = np.array(img, dtype=np.float64) 
-    highlighted_img = np.array(img, dtype=np.float64) 
-    iter_num = 0
-    
-    target_width = np.floor((1- target_width_ratio) * w)
+def carve_seams(
+    img,
+    target_width_ratio: float,
+    highlight_color: tuple = None,
+    energy_function: Callable[[np.ndarray], np.ndarray] = compute_energy_from_gradient,
+    vertical: bool = True,
+    horizontal: bool = False,
+) -> tuple:
+    h, w = img.shape[:2]
+    reduced_img = np.array(img, dtype=np.float64)
+    highlighted_img = np.array(img, dtype=np.float64)
+
     if target_width_ratio < 0:
         raise ValueError("target_width_ratio must be positive")
     if target_width_ratio > 1:
         raise ValueError("target_width_ratio must not exceed the current width")
-    if highlight_color ==None:
-        highlight_color = (255,0,0)
-        
-    # original column of every remaining pixel
-    col_idx = np.tile(np.arange(w), (h, 1))
-    rows = np.arange(h)
-    
-    while reduced_img.shape[1] > target_width:
-        # print(f"Iteration: {iter_num}")
-        
-        energy = compute_energy_from_gradient(reduced_img)
-        seam = find_seam(energy)
-        # shrink width by 1 each iteration
-        reduced_img = remove_seam(reduced_img, seam)    
-        
-        # map seam to original coordinates and shrink the index map
-        original_cols = col_idx[rows,seam]
-        highlight_seam(highlighted_img,original_cols,highlight_color)
-        col_idx = remove_seam(col_idx,seam) 
-    
-        iter_num+=1
-    
-    return reduced_img,highlighted_img
+    if highlight_color is None:
+        highlight_color = (255, 0, 0)
+
+    # track each remaining pixel's original location for seam highlighting
+    original_indices = np.arange(h * w).reshape(h, w)
+
+    for is_horizontal in (False, True):
+        if not (horizontal if is_horizontal else vertical):
+            continue
+
+        working_img = np.swapaxes(reduced_img, 0, 1) if is_horizontal else reduced_img
+        working_indices = (
+            np.swapaxes(original_indices, 0, 1)
+            if is_horizontal
+            else original_indices
+        )
+        target_width = np.floor((1 - target_width_ratio) * working_img.shape[1])
+        rows = np.arange(working_img.shape[0])
+
+        while working_img.shape[1] > target_width:
+            energy = energy_function(to_gray(working_img))
+            seam = find_seam(energy)
+            removed_indices = working_indices[rows, seam]
+            original_rows, original_cols = np.divmod(removed_indices, w)
+            highlighted_img[original_rows, original_cols] = highlight_color
+            working_img = remove_seam(working_img, seam)
+            working_indices = remove_seam(working_indices, seam)
+
+        if is_horizontal:
+            reduced_img = np.swapaxes(working_img, 0, 1)
+            original_indices = np.swapaxes(working_indices, 0, 1)
+        else:
+            reduced_img = working_img
+            original_indices = working_indices
+
+    return reduced_img, highlighted_img
