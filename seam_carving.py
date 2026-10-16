@@ -112,6 +112,7 @@ def carve_seams(
         target_width = np.floor((1 - target_width_ratio) * working_img.shape[1])
         rows = np.arange(working_img.shape[0])
 
+        # remove seams till the target width is reached
         while working_img.shape[1] > target_width:
             energy = energy_function(to_gray(working_img))
             seam = find_seam(energy)
@@ -121,6 +122,7 @@ def carve_seams(
             working_img = remove_seam(working_img, seam)
             working_indices = remove_seam(working_indices, seam)
 
+        # transpose for horizontal seams
         if is_horizontal:
             reduced_img = np.swapaxes(working_img, 0, 1)
             original_indices = np.swapaxes(working_indices, 0, 1)
@@ -129,3 +131,90 @@ def carve_seams(
             original_indices = working_indices
 
     return reduced_img, highlighted_img
+
+def remove_object(
+    img: np.ndarray,
+    mask: np.ndarray,
+    energy_function: Callable[[np.ndarray], np.ndarray] = compute_energy_from_gradient,
+) -> tuple:
+    mask_array = np.asarray(mask)
+    if mask_array.shape == img.shape[:2]:
+        working_mask = mask_array.astype(bool, copy=True)
+    elif img.ndim == 3 and mask_array.shape == img.shape:
+        working_mask = np.any(mask_array != 0, axis=2)
+    else:
+        raise ValueError("mask must have the same height and width as img")
+
+    original_img = np.asarray(img, dtype=np.float64)
+    # copy of the original photo that decreases by removing the object
+    working_img = original_img.copy()
+    h = working_mask.shape[0]
+    rows = np.arange(h)
+    seam_count = 0
+
+    # repeat till no masked pixel is left
+    while np.any(working_mask):
+        if working_img.shape[1] <= 1:
+            raise ValueError("cannot remove the mask while retaining image pixels")
+
+        gray = np.asarray(to_gray(working_img), dtype=np.float64)
+        energy = np.asarray(energy_function(gray), dtype=np.float64).copy()
+        if energy.shape != working_mask.shape:
+            raise ValueError("energy_function must return an array matching the image")
+    
+        energy[working_mask] = -1e6
+        seam = find_seam(energy)
+
+        # remove the cheapest seam in the selected part from the photo and the mask
+        working_img = remove_seam(working_img, seam)
+        working_mask = remove_seam(working_mask, seam)
+        seam_count += 1
+
+    # copy the reduced photo
+    seam_copy = working_img.copy()
+    highlighted_img = working_img.copy()
+    reduced_width = seam_copy.shape[1]
+    # placeholder array holding each pixel's column
+    column_map = np.tile(np.arange(reduced_width), (h, 1))
+    inserted_columns: list[list[int]] = [[] for _ in range(h)]
+
+    for _ in range(seam_count):
+        if seam_copy.shape[1] == 0:
+            raise ValueError(
+                "cannot find enough insertion seams in the reduced image"
+            )
+        energy = np.asarray(
+            energy_function(to_gray(seam_copy)), dtype=np.float64
+        )
+        seam = find_seam(energy)
+        # get the columns where new pixels are to be inserted
+        for row, col in enumerate(column_map[rows, seam]):
+            inserted_columns[row].append(int(col))
+            highlight_color = (0, 255, 0) if highlighted_img.ndim == 3 else 255
+            highlighted_img[row, int(col)] = highlight_color
+        
+        # shrink the copy to find the next seam
+        seam_copy = remove_seam(seam_copy, seam)
+        column_map = remove_seam(column_map, seam)
+
+    expanded_rows = []
+    for row in range(h):
+        expanded_row = []
+        seam_columns = set(inserted_columns[row])
+        for col, pixel in enumerate(working_img[row]):
+            if col not in seam_columns:
+                expanded_row.append(pixel)
+                continue
+            # append the averaged pixel or the border
+            left = working_img[row, max(col - 1, 0)]
+            right = working_img[row, min(col + 1, reduced_width - 1)]
+            expanded_row.extend(((pixel + left) / 2, (pixel + right) / 2))
+        expanded_rows.append(np.asarray(expanded_row))
+
+    restored_img = np.stack(expanded_rows)
+    return restored_img, highlighted_img
+    # TODO: write this in the report:
+    # The copy us used to find insertion locations and it is shrunk every iteration to discard used seams. Choosing 
+    # the cheapest seam from the same image and appending it iteratively would affect the image's energy calculation 
+    # based on synthetic pixels and not the original pixels which are present in the reduced image copy
+    
