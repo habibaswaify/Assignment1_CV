@@ -96,3 +96,65 @@ Derivatives amplify noise, so one solution is to blur before differentiating. Co
 - The DoG blurs and differentiates in one step, since (I * G) * Dx = I * (G * Dx). The Gaussian averages neighbors first, so noise and texture are smoothed out before the derivative and only changes that last over a few pixels remain.
 - The same averaging spreads each edge over about sigma pixels, so the contours get thicker and the peak gradient drops, which is why the threshold is lower.
 - A bigger sigma would remove more detail and make thicker edges, a smaller sigma would be closer to 1.2.
+
+# Part 2: Frequencies, Pyramids and Blending
+
+Code is in `Hybrid_img.py` (low-pass, high-pass, hybrid), `convolution.py`, `2_1.ipynb` and `2_2.ipynb` (OTHER PARTS TO BE IMPLEMENTED 2.3 W 2.4). All blurs use the separable convolution `conv2d_sep` with reflect padding. The Gaussian kernel for a given sigma is 2·ceil(3σ)+1 wide, and color images are filtered one channel at a time.
+
+## 2.1 Hybrid images
+
+A blur keeps the low frequencies of an image, and the image minus its blur keeps the high ones. A hybrid adds the high frequencies of one image to the low frequencies of another. Up close the high frequencies dominate, and from far away only the low ones are visible, so the picture changes with viewing distance.
+
+For each pair processing was as folllows:
+- Aligned the second image to the first with `align_images.py`, then cropped both to the same frame.
+- Low-passed the first image with a Gaussian (σ_low).
+- High-passed the second: the image minus its own Gaussian blur (σ_high).
+- Added the two and clipped to [0, 1].
+
+Sigma sets the cutoff frequency. A Gaussian with σ pixels keeps frequencies below about 1/(2πσ) cycles per pixel, so a bigger σ means a lower cutoff.
+
+The three hybrids:
+All three were had the following sigmas: σ_low = 7, σ_high =4.
+- **Man + cat**: man low-passed, cat high-passed. Up close, the cat's fur, whiskers and eyes fill the face. The man supplies the face shape, hairline, ears and skin tone, and his mouth shows below the cat's nose. This one worked best.
+- **elrayes + lion:** elrayes low-passed, lion high-passed. The eyes, nose and mouth line up well, so the lion's fur and whiskers sit on the right features. What remains of the man is his suit, tie and skin tone.
+- **Deer + frog:** deer low-passed, frog high-passed. The eyes line up. Up close the frog's eyes, skin texture and mouth outline stand out, and the deer provides the soft face shape, ears and background.
+
+**Failure case (deer + frog):** this is the weakest of the three.
+- The frog's eyes and mouth outline are large, high-contrast structures. A σ_high of 4 lets them through, so they stay visible even when the image is small, and the deer never fully takes over.
+- The face geometry doesn't match. The frog's wide, low mouth doesn't fit the deer's muzzle, so the result looks like a double exposure instead of one face.
+- The deer's low-pass has few distinctive cues besides the ears and the background, so the deer is hard to recognize from far away.
+
+**Where the other hybrids fall short:** in elrayes + lion, the lion's fine texture also spills onto the suit and neck, and a green patterned background from the lion image shows at the top corners.
+
+![alt text](hybrid_deer_frog.png) 
+![alt text](hybrid_man_cat.png) 
+![alt text](hybrid_rayes_lion.png)
+
+**Tuning sigma:**
+- A bigger σ_low blurs the far-away image more, so less of it competes with the other image.
+- A bigger σ_high lets more of the second image through, so it shows from farther away. A smaller σ_high keeps only the finest details, so it shows only up close.
+
+
+**Favorite hybrid, the whole process (man + cat):**
+
+![alt text](image.png)
+
+The spectra are computed on the grayscale images with `np.log(np.abs(np.fft.fftshift(np.fft.fft2(gray))))`, so the center is the low frequencies. Observations:
+- The man's spectrum is concentrated near the center, and the low-passed man looks the same near the center but fades out toward the edges.
+- The cat's high-pass spectrum has a dark region in the center, since the low frequencies were removed, and keeps the outer frequencies.
+- The hybrid has the man's central part plus the cat's outer part, so both frequency bands are present.
+
+## 2.2 Aliasing
+
+`rings.png` (grayscale) and shrank it to a quarter of its width and height in two ways: keeping every fourth pixel, and blurring with a Gaussian first and then keeping every fourth pixel. Samples swept at σ = 1, 1.5, 2, 2.25, 2.5 and 3 to find where the false circles disappear. The smallest σ with no false circles was **σ = 2.5** 
+
+![alt text](output_2.png)
+
+![alt text](output_3.png)
+
+**What happened:**
+- **Naive:** keeping every fourth pixel samples the image at 1/4 of its resolution, so the new grid can only represent frequencies below 1/8 cycle per original pixel. The finer rings are not simply lost. Their frequency folds back into lower frequencies, so they appear as false circles that were not in the original. This is aliasing.  
+
+- **Blur first:** the Gaussian removes most of the frequencies above what the new grid can represent before sampling. A Gaussian with standard deviation σ keeps a fraction exp(−2π²σ²f²) of the amplitude at frequency f. At f = 1/8 cycle per pixel, which is the limit of the new grid, that is 73% for σ = 1 but only 15% for σ = 2.5 (calculated from this formula, and I checked it against the discrete kernel I use). The frequencies that actually alias, above 1/8, are cut much harder, so there is almost nothing left to alias and no false circles show up. The price is that the rings that were too fine for the small image become smooth gray, which is detail that can't be represented anyway.
+
+**What this means for a Gaussian pyramid:** every level has to be blurred before it is subsampled, never subsampled directly. The blur must also be strong enough for the factor. For a factor of 2, the [1 4 6 4 1]/16 kernel has σ = 1, and for a factor of 4, we needed about 2.5, so sigma grows with the subsampling factor.
