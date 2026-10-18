@@ -28,7 +28,19 @@ Three energy computation functions were tested for seam detection:
 * Finite Differences
 * Derivative of Gaussian (DoG)
 
-Gradient magnitude's and finite differences' seams were almost identical, while DoG's seams showed slight difference, and even a minor distortion in fine details: such as discontinuities. This is primarily due to the blurring effect of DoG before computing the energy. The edge discontinuity effect is prominent in *starry_night.jpg* and *rocket.jpg*
+Gradient magnitude's and finite differences' seams were almost identical, while DoG's seams showed slight difference, and even a minor distortion in fine details: such as discontinuities. This is primarily due to the blurring effect of DoG before computing the energy. The discontinuity effect is prominent in *starry_night.jpg* and *rocket.jpg*
 ![starry_night](starter_pack\images\part3_seams\outputs\output_3_2_5.png)
 ![rocket](starter_pack\images\part3_seams\outputs\output_3_2_6.png)
 
+---
+## Bonus
+### Object Removal
+The user selects an object to remove using `matplotlib` widget while keeping the original image size. The widget creates a resizeable elliptical mask surrounding the object. Seam carving is used to reduce the discontinuities caused by such process. The implementation is found in the `remove_object()` function and it is demonstrated briefly as follows: 
+- The image is copied into `working_img`
+- Cheapest seams are removed iteratively from the mask and `working_img`
+- `working_img`is copied into `seam_copy`, then the cheapest seams of the current `seam_copy` are used to generate new pixels by averaging and they are removed from `seam_copy` afterwards
+
+The copy (`seam_copy`) is used to find insertion locations and it is shrunk every iteration to discard used seams. Choosing the cheapest seam from the same image (`working_img`) and appending it iteratively would affect the image's energy calculation based on synthetic pixels and not the original pixels which are present in the reduced image copy.
+The test performed on `broadway_tower.png` is shown below
+![tower_mask](starter_pack\images\part3_seams\outputs\bonus_1.png)
+![tower_removed](starter_pack\images\part3_seams\outputs\bonus_2.png)
