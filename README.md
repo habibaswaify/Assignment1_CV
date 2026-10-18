@@ -4,7 +4,7 @@
 # Part 1: Filters and Edges
 
 Code is in `convolution.py`, `filters_helpers.py` and `part1.ipynb`. 
-From 1.2 on, every blur and derivative runs on my separable convolution (`conv2d_sep`).
+From 1.2 on, every blur and derivative runs on separable convolution (`conv2d_sep`).
 Images are grayscale and max 1000 px on the longer side.
 
 ## 1.1 Convolution from scratch
@@ -56,7 +56,7 @@ An edge is a sharp change in intensity, and derivatives measure change (in our c
 
 ![alt text](figs/1_2_cameraman.png)
 
-![\[FIGURE: figs/1_2_facade.png\]](figs/1_2_facade.png)
+![alt text](figs/1_2_facade.png)
 
 **Threshold:** swept T = 0.05, 0.1, 0.2, 0.3, 0.4 and picked T = 0.2 for both images.
 - **Facade:** at 0.05 and 0.1 the wall and the shutters fill with speckle that hides the structure. At 0.3 and 0.4 the window outlines and the door arch start breaking up. At 0.2 the windows, balcony, arch and signs stay clean and the flat wall is black.
@@ -64,7 +64,7 @@ An edge is a sharp change in intensity, and derivatives measure change (in our c
 
 **Lines along the frame:** with zero padding the convolution assumes black (0) outside the image. On the first and last row and column the filter compares a real pixel with a fake black one, so it sees a big step wherever the border is brighter than the threshold. Dx makes the lines on the left and right sides and Dy on the top and bottom. They are not real edges, only the padding - yet they correspond to an edge, and therefore theres a white aura around the image (a gray border is added for visibility). With reflect padding there is no fake step and the lines are gone.
 
-![\[FIGURE: figs/1_2_frame_cameraman.png\]](figs/1_2_frame_cameraman.png)
+![alt text](figs/1_2_frame_cameraman.png)
 
 ![alt text](figs/1_2_corner_cameraman.png)
 
@@ -75,7 +75,7 @@ Derivatives amplify noise, so one solution is to blur before differentiating. Co
 
 ![alt text](figs/1_3_filters.png)
 
-![\[FIGURE: figs/1_3_cameraman.png\]](figs/1_3_cameraman.png)
+![alt text](figs/1_3_cameraman.png)
 
 ![alt text](figs/1_3_cameraman.png)
 
@@ -126,9 +126,9 @@ All three were had the following sigmas: σ_low = 7, σ_high =4.
 
 **Where the other hybrids fall short:** in elrayes + lion, the lion's fine texture also spills onto the suit and neck, and a green patterned background from the lion image shows at the top corners.
 
-![alt text](hybrid_deer_frog.png) 
-![alt text](hybrid_man_cat.png) 
-![alt text](hybrid_rayes_lion.png)
+![alt text](figs/hybrid_deer_frog.png) 
+![alt text](figs/hybrid_man_cat.png) 
+![alt text](figs/hybrid_rayes_lion.png)
 
 **Tuning sigma:**
 - A bigger σ_low blurs the far-away image more, so less of it competes with the other image.
@@ -137,7 +137,7 @@ All three were had the following sigmas: σ_low = 7, σ_high =4.
 
 **Favorite hybrid, the whole process (man + cat):**
 
-![alt text](image.png)
+![alt text](figs/image.png)
 
 The spectra are computed on the grayscale images with `np.log(np.abs(np.fft.fftshift(np.fft.fft2(gray))))`, so the center is the low frequencies. Observations:
 - The man's spectrum is concentrated near the center, and the low-passed man looks the same near the center but fades out toward the edges.
@@ -148,13 +148,91 @@ The spectra are computed on the grayscale images with `np.log(np.abs(np.fft.ffts
 
 `rings.png` (grayscale) and shrank it to a quarter of its width and height in two ways: keeping every fourth pixel, and blurring with a Gaussian first and then keeping every fourth pixel. Samples swept at σ = 1, 1.5, 2, 2.25, 2.5 and 3 to find where the false circles disappear. The smallest σ with no false circles was **σ = 2.5** 
 
-![alt text](output_2.png)
+![alt text](figs/output_2.png)
 
-![alt text](output_3.png)
+![alt text](figs/output_3.png)
 
 **What happened:**
 - **Naive:** keeping every fourth pixel samples the image at 1/4 of its resolution, so the new grid can only represent frequencies below 1/8 cycle per original pixel. The finer rings are not simply lost. Their frequency folds back into lower frequencies, so they appear as false circles that were not in the original. This is aliasing.  
 
-- **Blur first:** the Gaussian removes most of the frequencies above what the new grid can represent before sampling. A Gaussian with standard deviation σ keeps a fraction exp(−2π²σ²f²) of the amplitude at frequency f. At f = 1/8 cycle per pixel, which is the limit of the new grid, that is 73% for σ = 1 but only 15% for σ = 2.5 (calculated from this formula, and I checked it against the discrete kernel I use). The frequencies that actually alias, above 1/8, are cut much harder, so there is almost nothing left to alias and no false circles show up. The price is that the rings that were too fine for the small image become smooth gray, which is detail that can't be represented anyway.
+- **Blur first:** the Gaussian removes most of the frequencies above what the new grid can represent before sampling. A Gaussian with standard deviation σ keeps a fraction exp(−2π²σ²f²) of the amplitude at frequency f. At f = 1/8 cycle per pixel, which is the limit of the new grid, that is 73% for σ = 1 but only 15% for σ = 2.5 (calculated from the formula, and checked against the discrete kernel used). The frequencies that actually alias, above 1/8, are cut much harder, so there is almost nothing left to alias and no false circles show up. The price is that the rings that were too fine for the small image become smooth gray, which is detail that can't be represented anyway.
 
 **What this means for a Gaussian pyramid:** every level has to be blurred before it is subsampled, never subsampled directly. The blur must also be strong enough for the factor. For a factor of 2, the [1 4 6 4 1]/16 kernel has σ = 1, and for a factor of 4, we needed about 2.5, so sigma grows with the subsampling factor.
+
+## 2.3 Gaussian and Laplacian pyramids
+
+Code is in `pyramids.py`. Both functions blur with [1 4 6 4 1]/16 along x and y (using separable convolution in `convolution.py`, reflect padding).
+
+- **reduce:** blurs the image, then keeps every other row and column.
+- **expand:** places each pixel at the top left of a 2 × 2 block of zeros (inserting px at every 2nd a col & row), blurs, and multiplies by 4. Three pixels out of four are zeros, so without the factor 4 (smoothing) the image would come out four times too dark. 
+- **Padding:** reflect padding, because zero padding would darken the border at every blur.
+- **Kernel:** the 5 × 5 kernel is the outer product of [1 4 6 4 1]/16 with itself, so it has rank 1 and `conv2d_sep` runs it as two 1D passes. Its variance is exactly 1, so it approximates a Gaussian with σ = 1. 
+- **Color:** color images are processed one channel at a time.
+- **Odd sides:** when a side is odd, expanding gives one row or column too many, the last one is dropped.
+
+`mosque.jpg` is used, cropped to 407 × 611, so both sides are odd and neither is a power of 2. With 4 reductions the Gaussian pyramid has 5 levels:
+
+`407 × 611 -- 204 × 306 -- 102 × 153 -- 51 × 77 -- 26 × 39`
+
+The odd handling shows up at most levels. For example, G1 (204 × 306) expands to 408 × 612, which is one row and one column too many for 407 × 611, so the extra ones are dropped. G3 (51 × 77) expands to 102 × 154, and only the extra column is dropped.
+
+**Pyramids:** the Gaussian pyramid applies reduce repeatedly. The Laplacian pyramid subtracts from each Gaussian level the next level expanded to its size, and ends with the smallest Gaussian level itself. To rebuild, we start from the smallest level and repeat: expand, then add the Laplacian level of that size.
+
+![alt text](figs/mosque_pyramid.png)
+
+![alt text](figs/Laplacian_Mosque.png)
+
+![alt text](figs/mosque_rebuilt.png)
+
+The rebuilt image has the same size as the original (407 × 611), with a maximum absolute error of 1.1e-16 and a mean of about 1e-20. That is floating-point rounding, so the rebuild is exact.
+
+**Why the rebuild is exact:** each Laplacian level is defined as L_k = G_k − expand(G_{k+1}), so G_k = L_k + expand(G_{k+1}) is true by definition, whatever expand does. Rebuilding applies the same expand with the same target size at every step, so each step undoes exactly the subtraction made when building. The only error is rounding.
+
+**Lecture 3's version is not exact:**There the residual is L_i = G_i − blur(G_i), and the next level is built by subsampling blur(G_i). To rebuild, we would need blur(G_i), but we only have a half-size subsampled copy of it. Expanding that copy gives an interpolation, not the original blurred image, because the samples dropped by subsampling were never stored. The residual was measured against a quantity the decoder cannot recompute, so the terms do not cancel and the rebuilt image has error.
+
+**Size:** each level has a quarter of the pixels of the one before, so the Gaussian pyramid has N · (1 + 1/4 + 1/16 + …) = 4N/3 pixels in the limit, about 1.33 times the image. Measured on the mosque with 5 levels it is 1.334. That is slightly above the five-term sum of 1.332 because odd sizes round up when reducing. The Laplacian pyramid has the same level sizes, so it costs the same.
+
+## 2.4 Multiresolution blending
+
+Two images are blended along a mask (white for first image, blackfor second):
+- Built the Laplacian pyramids L1 and L2 of the two images, and the Gaussian pyramid of the mask.
+- At each level, theyre combined as M·L1 + (1 − M)·L2, with M the mask's level of that size.
+- Rebuilded the result from the combined pyramid, as in 2.3.
+
+The mask itself stays sharp. Its Gaussian pyramid softens it, a little at the fine levels and a lot at the coarse ones.
+
+**The three blends:**
+- **Oraple:** `apple.jpg` and `orange.jpg` from the starter pack, mask with the left half white, 5 levels.
+- **Glazed donut + sprinkle donut:** aligned `donut.jpg` to `glazed.jpg` with `align_images.py` using two points on each . The mask is an ellipse drawn with `cv2.ellipse`, centered on the image, with half-axes 0.18 × width and 0.38 × height. 7 levels.
+- **Egyptian pound + euro:** aligned `gneh.jpg` to `euro.png` using two points. The mask is an ellipse drawn with `cv2.ellipse`, centered, with half-axes 0.38 × width and 0.28 × height. 5 levels.
+
+![alt text](figs/oraple_cut.png)
+![alt text](figs/oraple.png)
+
+![alt text](figs/g_donut.png)
+
+![alt text](figs/euro_gneh.png)
+
+**Number of levels:** too few levels leave the seam visible, because even the coarsest level of the mask is still fairly sharp. Too many levels spread the coarse structure over most of the image, which washes out a small pasted object. 
+
+- **Levels meaning:** `levels = n` means n reductions, so each pyramid has n + 1 images (G0 to Gn). 
+- Oraple: 5 (the function default)
+- Glazed + donut: 7
+- Gneh + euro: 5
+
+- **How much the mask softens:** the mask's pyramid is built with the same reduce, so its edge gets blurrier at every level. At level 0 it stays sharp, at level 1 it is blurred by about 1 pixel, and the blur roughly doubles at each level. The finest band therefore switches at the sharp mask edge, and the coarsest bands switch over tens of pixels.
+
+- **Why too many levels wash out a small object:** in the glazed + donut blend with 7 levels the coarsest band switches over a large part of the ellipse, so its color and brightness blur into the surroundings.
+
+- **Clipping:** blending can overshoot slightly outside [0, 1], so the blended result is clipped. The rebuild in 2.3 is not clipped, which is why its error is only rounding.
+
+**Favorite (glazed + donut):**
+
+![alt text](figs/g_d_l0.png)
+![alt text](figs/g_d_l1.png)
+![alt text](figs/g_d_l2.png)
+![alt text](figs/g_d_l3.png)
+![alt text](figs/g_d_l4.png)
+![alt text](figs/g_d_l5.png)
+
+**Why blending band by band hides the seam:** the hard cut switches from one image to the other at a single sharp line, so the whole difference between the two images, in every frequency, is visible along that line. Here each frequency band is blended over its own width. The fine levels, which hold edges and texture, switch over a narrow band, so details stay sharp. The coarse levels, which hold colors and brightness, switch over a wide band, which hides the difference in lighting and color between the images. Mixing the coarse levels gradually removes the visible step, while the fine detail of each image stays intact on its own side.
