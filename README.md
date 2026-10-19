@@ -342,4 +342,3 @@ The copy (`seam_copy`) is used to find insertion locations and it is shrunk ever
 The test performed on `broadway_tower.png` is shown below
 ![tower_mask](starter_pack/images/part3_seams/outputs/bonus_1.png)
 ![tower_removed](starter_pack/images/part3_seams/outputs/bonus_2.png)
-
