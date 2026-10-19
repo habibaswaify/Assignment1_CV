@@ -1,3 +1,7 @@
+# Jana Mohamed AboAgla 8898
+# Habiba Hossam Eldin 8630
+# Abdelrahman Yasser 10349
+
 # Assignment1_CV
 
 # Part 1: Filters and Edges
@@ -139,9 +143,9 @@ Derivatives amplify noise, so one solution is to blur before differentiating. Co
 
 ![alt text](figs/1_3_cameraman.png)
 
-![alt text](figs/1_3_cameraman.png)
+![alt text](figs/1_3_facade.png)
 
-**Parameters:** sigma = 2, T = 0.08 for the cameraman and T = 0.06 for the facade, again from a sweep (0.02, 0.04, 0.06, 0.08, 0.12). On the facade, 0.04 leaves blobs on the walls, 0.06 gives clean walls with continuous contours, and from 0.08 the door arch and thin contours start to disappear. T = 0.8, on cameraman image, achieves best tradeoff with clearest edges.
+**Parameters:** sigma = 2, T = 0.08 for the cameraman and T = 0.06 for the facade, again from a sweep (0.02, 0.04, 0.06, 0.08, 0.12). On the facade, 0.04 leaves blobs on the walls, 0.06 gives clean walls with continuous contours, and from 0.08 the door arch and thin contours start to disappear. T = 00.8, on cameraman image, achieves best tradeoff with clearest edges.
 
 **Check:** one DoG convolution matches blur first then differentiate, up to about 0.002. That small difference is just from cutting the Gaussian to 13 × 13.
 
@@ -161,7 +165,7 @@ Derivatives amplify noise, so one solution is to blur before differentiating. Co
 
 # Part 2: Frequencies, Pyramids and Blending
 
-Code is in `Hybrid_img.py` (low-pass, high-pass, hybrid), `convolution.py`, `2_1.ipynb` and `2_2.ipynb` (OTHER PARTS TO BE IMPLEMENTED 2.3 W 2.4). All blurs use the separable convolution `conv2d_sep` with reflect padding. The Gaussian kernel for a given sigma is 2·ceil(3σ)+1 wide, and color images are filtered one channel at a time.
+Code is in `Hybrid_img.py` (low-pass, high-pass, hybrid), `convolution.py`, `2_1.ipynb`, `2_2.ipynb`, `2_3.ipynb`, `2_4.ipynb` and `pyramids.py`. All blurs use the separable convolution `conv2d_sep` with reflect padding. The Gaussian kernel for a given sigma is 2·ceil(3σ)+1 wide, and color images are filtered one channel at a time.
 
 ## 2.1 Hybrid images
 
@@ -208,7 +212,7 @@ The spectra are computed on the grayscale images with `np.log(np.abs(np.fft.ffts
 
 ## 2.2 Aliasing
 
-`rings.png` (grayscale) and shrank it to a quarter of its width and height in two ways: keeping every fourth pixel, and blurring with a Gaussian first and then keeping every fourth pixel. Samples swept at σ = 1, 1.5, 2, 2.25, 2.5 and 3 to find where the false circles disappear. The smallest σ with no false circles was **σ = 2.5** 
+Took `rings.png` (grayscale) and shrank it to a quarter of its width and height in two ways: keeping every fourth pixel, and blurring with a Gaussian first and then keeping every fourth pixel. Samples swept at σ = 1, 1.5, 2, 2.25, 2.5 and 3 to find where the false circles disappear. The smallest σ with no false circles was **σ = 2.5** 
 
 ![alt text](figs/output_2.png)
 
@@ -265,8 +269,8 @@ The mask itself stays sharp. Its Gaussian pyramid softens it, a little at the fi
 
 **The three blends:**
 - **Oraple:** `apple.jpg` and `orange.jpg` from the starter pack, mask with the left half white, 5 levels.
-- **Glazed donut + sprinkle donut:** aligned `donut.jpg` to `glazed.jpg` with `align_images.py` using two points on each . The mask is an ellipse drawn with `cv2.ellipse`, centered on the image, with half-axes 0.18 × width and 0.38 × height. 7 levels.
-- **Egyptian pound + euro:** aligned `gneh.jpg` to `euro.png` using two points. The mask is an ellipse drawn with `cv2.ellipse`, centered, with half-axes 0.38 × width and 0.28 × height. 5 levels.
+- **Glazed donut + sprinkle donut:** aligned `donut.jpg` to `glazed.jpg` with `align_images.py` using two points on each . The mask is the left half of the image set to white plus an ellipse drawn with `cv2.ellipse`, centered on the image, with half-axes 0.18 × width and 0.38 × height. 7 levels.
+- **Egyptian pound + euro:** aligned `gneh.jpg` to `euro.png` using two points. The mask is the left half of the image set to white plus an ellipse drawn with `cv2.ellipse`, centered, with half-axes 0.38 × width and 0.28 × height. 5 levels.
 
 ![alt text](figs/oraple_cut.png)
 ![alt text](figs/oraple.png)
@@ -289,6 +293,8 @@ The mask itself stays sharp. Its Gaussian pyramid softens it, a little at the fi
 - **Clipping:** blending can overshoot slightly outside [0, 1], so the blended result is clipped. The rebuild in 2.3 is not clipped, which is why its error is only rounding.
 
 **Favorite (glazed + donut):**
+
+Each row shows M·L1, (1 − M)·L2 and their sum. These figures were made with a 5-level pyramid (levels 0 to 5), while the blend itself uses 7. Levels 0 to 4 are identical in both, since each Laplacian level depends only on its own Gaussian level and the next one.
 
 ![alt text](figs/g_d_l0.png)
 ![alt text](figs/g_d_l1.png)
@@ -342,3 +348,4 @@ The copy (`seam_copy`) is used to find insertion locations and it is shrunk ever
 The test performed on `broadway_tower.png` is shown below
 ![tower_mask](starter_pack/images/part3_seams/outputs/bonus_1.png)
 ![tower_removed](starter_pack/images/part3_seams/outputs/bonus_2.png)
+
